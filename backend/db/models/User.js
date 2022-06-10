@@ -17,10 +17,6 @@ const User = new mongoose.Schema({
 		type: String,
 		required: true,
 	},
-	cPassword: {
-		type: String,
-		required: true,
-	},
 });
 
 module.exports = mongoose.model("User", User);
