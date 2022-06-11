@@ -1,10 +1,9 @@
-const express = require("express");
-const User = require("../db/models/User.js");
-const router = express.Router();
-const { body, validationResult } = require("express-validator");
-const bcrypt = require("bcrypt");
-const saltRounds = 10;
-const jwt = require("jsonwebtoken");
+const express = require("express")
+const User = require("../db/models/User.js")
+const router = express.Router()
+const { body, validationResult } = require("express-validator")
+const bcrypt = require("bcrypt")
+const jwt = require("jsonwebtoken")
 
 // Signup/Register starts here
 router.post(
@@ -44,31 +43,32 @@ router.post(
 	// Matches both passwords
 	body("cPassword").custom((value, { req }) => {
 		if (value !== req.body.password) {
-			throw new Error("Password and Confirm Password does not match");
+			throw new Error("Password and Confirm Password does not match")
 		}
-		return true;
+		return true
 	}),
 	// Checks if email already in use
 	body("email").custom((email) => {
 		return User.findOne({ email }).then((user) => {
 			if (user) {
-				return Promise.reject("E-mail already in use");
+				return Promise.reject("E-mail already in use")
 			}
-		});
+		})
 	}),
 	// Express-Validation \\
 
 	async (req, res) => {
 		// Express-Validation //
-		const errors = validationResult(req);
+		const errors = validationResult(req)
 		if (!errors.isEmpty()) {
-			return res.status(400).json({ errors: errors.array() });
+			return res.status(400).json({ errors: errors.array() })
 		}
 		// Express-Validation \\
 
 		// Password is being encrypted using bcrypt liberary
 		// TODO: saltRounds must be stored in dotenv / .env file
-		let hashedPassword = await bcrypt.hash(req.body.password, saltRounds);
+		let saltRounds = process.env.SALT_ROUNDS
+		let hashedPassword = await bcrypt.hash(req.body.password, saltRounds)
 
 		// Saving/Creating new user in mongoDB usinf User model of mongoose
 		const createdUser = await User.create({
@@ -76,10 +76,10 @@ router.post(
 			lastName: req.body.lastName,
 			email: req.body.email,
 			password: hashedPassword,
-		});
-		return res.status(201).json({ "User Created As ": createdUser });
+		})
+		return res.status(201).json({ "User Created As ": createdUser })
 	}
-);
+)
 // Signup/Register ends here
 
 // Login/Signin starts here
@@ -89,14 +89,14 @@ router.get(
 	body("email", "Not a valid email address").isEmail(),
 	async (req, res) => {
 		// Express-Validation //
-		const errors = validationResult(req);
+		const errors = validationResult(req)
 		if (!errors.isEmpty()) {
-			console.log(errors);
-			return res.status(400).json({ errors: errors.array() });
+			console.log(errors)
+			return res.status(400).json({ errors: errors.array() })
 		}
 		// Express-Validation \\
 
-		let userExists = await User.findOne({ email: req.body.email });
+		let userExists = await User.findOne({ email: req.body.email })
 
 		if (!userExists) {
 			return res.status(400).json({
@@ -106,12 +106,12 @@ router.get(
 					param: "email",
 					location: "body",
 				}),
-			});
+			})
 		}
 		let passwordMatched = await bcrypt.compare(
 			req.body.password,
 			userExists.password
-		);
+		)
 		if (!passwordMatched) {
 			return res.status(400).json({
 				errors: errors.errors.concat({
@@ -120,18 +120,21 @@ router.get(
 					param: "password",
 					location: "body",
 				}),
-			});
+			})
 		}
 
-		if (passwordMatched) {
-			return res
-				.status(200)
-				.json({ name: `Hello you're Loged In as ${userExists.email}` });
-		}
-		return res.status(500).json({ message: "Internal Server Error" });
+		let data = { email: userExists.email }
+		let jwtSecretKey = process.env.JWT_SECRET_KEY
+		const token = await jwt.sign(data, jwtSecretKey)
+
+		res.cookie("auth", token, {
+			httpOnly: true,
+			secure: true,
+		})
+		res.status(200).json({ token })
 	}
-);
+)
 //
 // Login/Signin ends here
 
-module.exports = router;
+module.exports = router
