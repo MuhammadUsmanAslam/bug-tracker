@@ -64,20 +64,29 @@ router.post(
 			return res.status(400).json({ errors: errors.array() })
 		}
 		// Express-Validation \\
+		try {
+			// Password is being encrypted using bcrypt liberary
+			let saltRounds = process.env.SALT_ROUNDS
+			let hashedPassword = await bcrypt.hash(req.body.password, saltRounds)
 
-		// Password is being encrypted using bcrypt liberary
-		// TODO: saltRounds must be stored in dotenv / .env file
-		let saltRounds = process.env.SALT_ROUNDS
-		let hashedPassword = await bcrypt.hash(req.body.password, saltRounds)
-
-		// Saving/Creating new user in mongoDB usinf User model of mongoose
-		const createdUser = await User.create({
-			firstName: req.body.firstName,
-			lastName: req.body.lastName,
-			email: req.body.email,
-			password: hashedPassword,
-		})
-		return res.status(201).json({ "User Created As ": createdUser })
+			// Saving/Creating new user in mongoDB usinf User model of mongoose
+			const createdUser = await User.create({
+				firstName: req.body.firstName,
+				lastName: req.body.lastName,
+				email: req.body.email,
+				password: hashedPassword,
+			})
+			return res.status(201).json({ "User Created As ": createdUser })
+		} catch (error) {
+			return res.status(500).json({
+				errors: errors.errors.concat({
+					// value: error,
+					msg: "Internal Server Error",
+					param: "req.param",
+					location: "param",
+				}),
+			})
+		}
 	}
 )
 // Signup/Register ends here
@@ -91,47 +100,59 @@ router.get(
 		// Express-Validation //
 		const errors = validationResult(req)
 		if (!errors.isEmpty()) {
-			console.log(errors)
+			// console.log(errors)
 			return res.status(400).json({ errors: errors.array() })
 		}
 		// Express-Validation \\
 
-		let userExists = await User.findOne({ email: req.body.email })
+		try {
+			let userExists = await User.findOne({ email: req.body.email })
 
-		if (!userExists) {
-			return res.status(400).json({
+			if (!userExists) {
+				return res.status(400).json({
+					errors: errors.errors.concat({
+						value: req.body.email,
+						msg: "User doesn't not exists",
+						param: "email",
+						location: "body",
+					}),
+				})
+			}
+			let passwordMatched = await bcrypt.compare(
+				req.body.password,
+				userExists.password
+			)
+			if (!passwordMatched) {
+				return res.status(400).json({
+					errors: errors.errors.concat({
+						value: req.body.password,
+						msg: "Password doesn't not match",
+						param: "password",
+						location: "body",
+					}),
+				})
+			}
+
+			let data = { email: userExists.email }
+			let jwtSecretKey = process.env.JWT_SECRET_KEY
+			const token = jwt.sign(data, jwtSecretKey)
+			// console.log(token)
+
+			res.cookie("auth", token, {
+				httpOnly: true,
+				secure: true,
+			})
+			res.status(200).json({ token })
+		} catch (error) {
+			return res.status(500).json({
 				errors: errors.errors.concat({
-					value: req.body.email,
-					msg: "User doesn't not exists",
-					param: "email",
-					location: "body",
+					// value: error,
+					msg: "Internal Server Error",
+					param: "req.param",
+					location: "param",
 				}),
 			})
 		}
-		let passwordMatched = await bcrypt.compare(
-			req.body.password,
-			userExists.password
-		)
-		if (!passwordMatched) {
-			return res.status(400).json({
-				errors: errors.errors.concat({
-					value: req.body.password,
-					msg: "Password doesn't not match",
-					param: "password",
-					location: "body",
-				}),
-			})
-		}
-
-		let data = { email: userExists.email }
-		let jwtSecretKey = process.env.JWT_SECRET_KEY
-		const token = await jwt.sign(data, jwtSecretKey)
-
-		res.cookie("auth", token, {
-			httpOnly: true,
-			secure: true,
-		})
-		res.status(200).json({ token })
 	}
 )
 //
